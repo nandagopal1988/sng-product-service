@@ -103,7 +103,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          git clone https://${{ secrets.AI_AGENT_TOKEN }}@github.com/<YOUR_ORG>/ai-pr-review-agent.git
+          git clone https://${{ secrets.AI_AGENT_TOKEN }}@github.com/nandagopal1988/ai-pr-review-agent.git
           cd ai-pr-review-agent
           python -m pip install .
       ##################################################
