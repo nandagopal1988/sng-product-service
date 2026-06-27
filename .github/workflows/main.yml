@@ -2,10 +2,12 @@ name: AI PR Review Agent
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main, master]
+
   pull_request:
-    types: [opened, synchronize, reopened]
+    types:
+      - opened
+      - synchronize
+      - reopened
     paths-ignore:
       - 'docs/**'
       - '**.md'
@@ -17,78 +19,128 @@ permissions:
   issues: write
   checks: write
 
+
 jobs:
   review:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     env:
       SERVICE_NAME: ${{ vars.SERVICE_NAME || 'generic-service' }}
-      REVIEW_FOCUS: ${{ vars.REVIEW_FOCUS || 'generic service' }}
-      REVIEW_CONTEXT: ${{ vars.REVIEW_CONTEXT || 'Review PRs for correctness, security, and service compatibility.' }}
+      REVIEW_FOCUS: ${{ vars.REVIEW_FOCUS || 'Java Spring Boot code quality, security and maintainability' }}
+      REVIEW_CONTEXT: ${{ vars.REVIEW_CONTEXT || 'Review PR changes for correctness, security vulnerabilities, performance issues and Spring Boot best practices.' }}
       REVIEW_STANDARDS: ${{ vars.REVIEW_STANDARDS || '' }}
-
     steps:
+      ##################################################
+      # Checkout Spring Boot repository
+      ##################################################
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Set up Java
+        with:
+          fetch-depth: 0
+      ##################################################
+      # Setup Java
+      ##################################################
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+      ##################################################
+      # Setup Python for AI Agent
+      ##################################################
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
+      ##################################################
+      # Detect Build Tool
+      ##################################################
       - name: Detect build tool
         id: detect-build
+        shell: bash
         run: |
           if [ -f pom.xml ]; then
-            echo "build_tool=maven" >> "$GITHUB_OUTPUT"
+            echo "build_tool=maven" >> $GITHUB_OUTPUT
           elif [ -f build.gradle ] || [ -f build.gradle.kts ]; then
-            echo "build_tool=gradle" >> "$GITHUB_OUTPUT"
+            echo "build_tool=gradle" >> $GITHUB_OUTPUT
           else
-            echo "build_tool=none" >> "$GITHUB_OUTPUT"
+            echo "build_tool=none" >> $GITHUB_OUTPUT
           fi
-
-      - name: Build project with Maven
-        if: steps.detect-build.outputs.build_tool == 'maven'
-        run: mvn -B test
-        continue-on-error: true
-
-      - name: Build project with Gradle
+      ##################################################
+      # Maven Build
+      ##################################################
+      - name: Run Maven Test
+        run: |
+          cd service-repo-integration
+          mvn -B test
+      ##################################################
+      # Gradle Build
+      ##################################################
+      - name: Run Gradle Test
         if: steps.detect-build.outputs.build_tool == 'gradle'
-        run: ./gradlew test
+        run: |
+          ./gradlew test
         continue-on-error: true
-
-      - name: Skip build for non-Java projects
-        if: steps.detect-build.outputs.build_tool == 'none'
-        run: echo "No Maven or Gradle build file found; skipping build step."
-
-      - name: Create review summary
-        id: review-summary
+      ##################################################
+      # Install AI Review Agent
+      ##################################################
+      - name: Install AI PR Review Agent
+        run: |
+          python -m pip install --upgrade pip
+          git clone https://${{ secrets.AI_AGENT_TOKEN }}@github.com/<YOUR_ORG>/ai-pr-review-agent.git
+          cd ai-pr-review-agent
+          python -m pip install .
+      ##################################################
+      # Run AI Review Agent
+      ##################################################
+      - name: Run AI PR Review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+          REVIEW_FOCUS: ${{ env.REVIEW_FOCUS }}
+          REVIEW_CONTEXT: ${{ env.REVIEW_CONTEXT }}
+          REVIEW_STANDARDS: ${{ env.REVIEW_STANDARDS }}
         run: |
-          echo "## 🤖 AI PR Review Agent" > review-summary.md
+          ai-pr-review
+      ##################################################
+      # Create Review Summary
+      ##################################################
+      - name: Create Review Summary
+        run: |
+          echo "# 🤖 AI PR Review Agent" > review-summary.md
           echo "" >> review-summary.md
-          echo "- Service: $SERVICE_NAME" >> review-summary.md
-          echo "- Focus: $REVIEW_FOCUS" >> review-summary.md
-          echo "- Context: $REVIEW_CONTEXT" >> review-summary.md
+          echo "Service: $SERVICE_NAME" >> review-summary.md
           echo "" >> review-summary.md
-          echo "The agent smoke test completed successfully for this pull request." >> review-summary.md
-
-      - name: Comment on PR
+          echo "Focus: $REVIEW_FOCUS" >> review-summary.md
+          echo "" >> review-summary.md
+          echo "## AI Findings" >> review-summary.md
+          if [ -f llm-review.md ];
+          then
+            cat llm-review.md >> review-summary.md
+          else
+            echo "AI review output not generated." >> review-summary.md
+          fi
+      ##################################################
+      # Post PR Comment
+      ##################################################
+      - name: Comment on Pull Request
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const body = fs.readFileSync('review-summary.md', 'utf8');
+            const body = fs.readFileSync(
+              'review-summary.md',
+              'utf8'
+            );
             await github.rest.issues.createComment({
-              issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body
+              issue_number: context.issue.number,
+              body: body
             });
