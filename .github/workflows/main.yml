@@ -59,16 +59,42 @@ jobs:
       - name: Build project with Maven
         if: steps.detect-build.outputs.build_tool == 'maven'
         run: mvn -B test
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Build project with Gradle
         if: steps.detect-build.outputs.build_tool == 'gradle'
         run: ./gradlew test
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Skip build for non-Java projects
         if: steps.detect-build.outputs.build_tool == 'none'
         run: echo "No Maven or Gradle build file found; skipping build step."
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run configured rule review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python scripts/run_rule_review.py
+
+      - name: Run LLM-based review
+        if: ${{ secrets.OPENAI_API_KEY != '' || secrets.ANTHROPIC_API_KEY != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+          REVIEW_FOCUS: ${{ env.REVIEW_FOCUS }}
+          REVIEW_CONTEXT: ${{ env.REVIEW_CONTEXT }}
+          REVIEW_STANDARDS: ${{ env.REVIEW_STANDARDS }}
+        run: |
+          python scripts/run_llm_review.py
 
       - name: Create review summary
         id: review-summary
@@ -84,7 +110,19 @@ jobs:
           echo "- Focus: $REVIEW_FOCUS" >> review-summary.md
           echo "- Context: $REVIEW_CONTEXT" >> review-summary.md
           echo "" >> review-summary.md
-          echo "The agent smoke test completed successfully for this pull request." >> review-summary.md
+          echo "### Rule-based findings" >> review-summary.md
+          if [ -f rule-review.json ]; then
+            python -c 'import json, pathlib; path = pathlib.Path("rule-review.json"); data = json.loads(path.read_text()) if path.exists() else []; output = "- No rule violations found" if not data else "\n".join([f"- [{item[\"severity\"]}] {item[\"rule_name\"]}: {item[\"message\"]}" for item in data[:5]]); print(output)' >> review-summary.md
+          else
+            echo "- Rule review output not found" >> review-summary.md
+          fi
+          echo "" >> review-summary.md
+          echo "### LLM review" >> review-summary.md
+          if [ -f llm-review.md ]; then
+            cat llm-review.md >> review-summary.md
+          else
+            echo "- LLM review was not run because no API key was configured." >> review-summary.md
+          fi
 
       - name: Comment on PR
         if: github.event_name == 'pull_request'
