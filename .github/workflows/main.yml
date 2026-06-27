@@ -50,8 +50,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: maven
-          cache-dependency-path: '**/pom.xml'
       ##################################################
       # Setup Python
       ##################################################
