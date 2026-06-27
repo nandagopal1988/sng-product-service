@@ -13,7 +13,7 @@ public class ProductService implements IProductService {
     @Autowired
     List<Product> objProductlst;
     @Override
-    public List<Product> getAllProduct()
+    public List<Product> GETALLPRODUCT()
     {
         Product objProduct = new Product();
         objProduct.ProductId =1;
