@@ -37,11 +37,31 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: 'maven'
 
-      - name: Build project
+      - name: Detect build tool
+        id: detect-build
+        run: |
+          if [ -f pom.xml ]; then
+            echo "build_tool=maven" >> "$GITHUB_OUTPUT"
+          elif [ -f build.gradle ] || [ -f build.gradle.kts ]; then
+            echo "build_tool=gradle" >> "$GITHUB_OUTPUT"
+          else
+            echo "build_tool=none" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build project with Maven
+        if: steps.detect-build.outputs.build_tool == 'maven'
         run: mvn -B test
         continue-on-error: true
+
+      - name: Build project with Gradle
+        if: steps.detect-build.outputs.build_tool == 'gradle'
+        run: ./gradlew test
+        continue-on-error: true
+
+      - name: Skip build for non-Java projects
+        if: steps.detect-build.outputs.build_tool == 'none'
+        run: echo "No Maven or Gradle build file found; skipping build step."
 
       - name: Create review summary
         id: review-summary
