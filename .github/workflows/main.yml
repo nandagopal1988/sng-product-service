@@ -1,4 +1,4 @@
-name: AI Review Agent
+name: AI PR Review Agent
 
 on:
   workflow_dispatch:
@@ -83,7 +83,6 @@ jobs:
           python scripts/run_rule_review.py
 
       - name: Run LLM-based review
-        if: ${{ secrets.OPENAI_API_KEY != '' || secrets.ANTHROPIC_API_KEY != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -94,7 +93,11 @@ jobs:
           REVIEW_CONTEXT: ${{ env.REVIEW_CONTEXT }}
           REVIEW_STANDARDS: ${{ env.REVIEW_STANDARDS }}
         run: |
-          python scripts/run_llm_review.py
+          if [ -n "$OPENAI_API_KEY" ] || [ -n "$ANTHROPIC_API_KEY" ]; then
+            python scripts/run_llm_review.py
+          else
+            echo "No LLM API key configured; skipping LLM review."
+          fi
 
       - name: Create review summary
         id: review-summary
