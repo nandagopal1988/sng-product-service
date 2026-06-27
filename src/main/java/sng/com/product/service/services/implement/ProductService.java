@@ -16,7 +16,7 @@ public class ProductService implements IProductService {
     public List<Product> GETALLPRODUCT()
     {
         Product objProduct = new Product()
-        objProduct.ProductId =1
+        objProduct.ProductId =1;
         objProduct.ProductCode="1245";
         objProduct.ProductName="Product001";
         objProduct.ProductDescription="Product_Description";
