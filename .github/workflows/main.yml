@@ -38,6 +38,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Inspect repository contents
+        run: |
+          pwd
+          ls -la
+          find . -maxdepth 2 \( -name pom.xml -o -name build.gradle -o -name build.gradle.kts \) -print
+
       - name: Detect build tool
         id: detect-build
         run: |
@@ -48,16 +54,17 @@ jobs:
           else
             echo "build_tool=none" >> "$GITHUB_OUTPUT"
           fi
+          echo "Detected build tool: $(cat "$GITHUB_OUTPUT")"
 
       - name: Build project with Maven
         if: steps.detect-build.outputs.build_tool == 'maven'
         run: mvn -B test
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Build project with Gradle
         if: steps.detect-build.outputs.build_tool == 'gradle'
         run: ./gradlew test
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Skip build for non-Java projects
         if: steps.detect-build.outputs.build_tool == 'none'
