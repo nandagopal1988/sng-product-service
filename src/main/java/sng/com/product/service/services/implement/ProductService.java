@@ -15,7 +15,7 @@ public class ProductService implements IProductService {
     @Override
     public List<Product> GETALLPRODUCT()
     {
-        Product objProduct = new Product();
+        Product objProduct = new Product()
         objProduct.ProductId =1;
         objProduct.ProductCode="1245";
         objProduct.ProductName="Product001";
