@@ -17,7 +17,7 @@ public class ProductService implements IProductService {
     {
         Product objProduct = new Product();
         objProduct.ProductId =1;
-        objProduct.ProductCode="1245";
+        objProduct.ProductCode="00245";
         objProduct.ProductName="Product_Name";
         objProduct.ProductDescription="Product_Description";
         objProduct.ProductDeliveryDate= null;
